@@ -94,20 +94,33 @@ def generate_bf(hosts, vlans, tableEntries, usertables, swith_id, user_code):
         table_list.append(table[1]) 
         switch = swith_id[usertables[i][0][0][0]]
         action = usertables[i][1][0].split('.')
-        f.write(table[1] + " = p4user." + table[0] + "." + table[1] + "\n")
-        match = "sw_id= " + str(switch) + ", "# Switch ID
+        src = "p4user." + usertables[i][0][0][1]
+        f.write(table[1] + " = "+ src + "\n")
+        match = "sw_id= " + str(switch) # Switch ID
+        action_value = ""
         for j in range(len(usertables[i][2])):
-            if j == 0:
-                match =  match + usertables[i][2][j][0] + " = " + usertables[i][2][j][1]
-            else:
-                match =  match + ", " + usertables[i][2][j][0] + " = " + usertables[i][2][j][1]
+            match =  match + ", " + usertables[i][2][j][0] + " = " + usertables[i][2][j][1]
+        
         for j in range(len(usertables[i][3])):
             if j == 0:
                 action_value =  usertables[i][3][j][0] + " = " + usertables[i][3][j][1]
             else:
                 action_value =  action_value + ", " + usertables[i][3][j][0] + " = " + usertables[i][3][j][1]
-        
-        f.write(table[1] + ".add_with_" + action[1] + "(" + match  + ", " +  action_value + ")\n")
+    
+        parameters = ""
+        if usertables[i][4] != "":
+            parameters = usertables[i][4]
+        if match !="":
+            if parameters != "":
+                parameters = parameters + ", " + match
+            else:
+                parameters = match
+        if action_value !="":
+            if parameters != "":
+                parameters = parameters + ", " + action_value
+            else:
+                parameters = action_value
+        f.write(table[1] + "." + action[1] + "(" + parameters + ")\n")
 
     table_list = [*set(table_list)]
 

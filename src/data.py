@@ -43,10 +43,12 @@ class generator:
 		self.port_user = 128
 
 		#Table
+		self.tables_used = []
 		self.table_name = []
 		self.intable = 0
 		self.action_name = []
 		self.match = []
+		self.params = ""
 		self.actionvalue = []
 		self.tableinfo = []
 
@@ -100,19 +102,20 @@ class generator:
 	def addmatch(self, name, value):
 		match = [name, value]
 		self.match.append(match)
-
+	def addparams(self, values):
+		self.params = values
 	def addactionvalue(self, name, value):
 		action = [name, value]
 		self.actionvalue.append(action)
 
 	def insert(self):
 		self.intable = 0
-		self.tableinfo.append([self.table_name,self.action_name,self.match,self.actionvalue])
+		self.tableinfo.append([self.table_name,self.action_name,self.match,self.actionvalue, self.params])
+		self.tables_used.append(self.table_name[0][-1].split(".")[-1])
 		self.table_name = []
 		self.action_name = []
 		self.match = []
 		self.actionvalue = []
-
 	def generate_chassis(self):
 		if (len(self.host) == 0):
 			print("No VLAN for P7 defined")
@@ -219,5 +222,5 @@ class generator:
 
 	def parse_usercode(self):
 		print("\nParsing User P4 Code\n")
-		editP4(self.p4_code, self.rec_port)
+		editP4(self.p4_code, self.rec_port, self.tables_used)
 

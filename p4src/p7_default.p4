@@ -18,6 +18,8 @@
 
 #include "common/headers.p4"
 #include "common/util.p4"
+// #include "/home/aditya/sde/pkgsrc/p4-examples/p4_16_programs/common/util.p4"
+// #include "/home/aditya/sde/pkgsrc/p4-examples/p4_16_programs/common/headers.p4"
 
 
 /*************************************************************************
@@ -26,8 +28,11 @@
 const vlan_id_t p7_vlan = 1920;        // vlan for P7
 const bit<16> total_sw = 4;         // total number of switches
 const bit<10> pkt_loss = 0x0;       // packet loss  - 0xCC - 240 - 20%
-const PortId_t rec_port = 68;       // recirculation port
-const bit<32> latency = 5000000;   // latency  - 10000000 - 10ms
+const PortId_t rec_port = 196;       // recirculation port
+const PortId_t port_user = 68;       // recirculation port
+const bit<32> latency = 0;   // latency  - 10000000 - 10ms
+const bit<32> constJitter = 0;   // latency  - 10000000 - 10ms
+const bit<7> percentTax = 127;   // percent*127/100
 
 /*************************************************************************
 **************  I N G R E S S   P R O C E S S I N G   *******************
@@ -45,6 +50,9 @@ struct headers {
 
 struct my_ingress_metadata_t {
     bit<32>  ts_diff;
+    bit<32>  jitter_metadata;
+    bit<1>   signal_metadata;
+    bit<31>  padding;
 }
 
     /******  G L O B A L   I N G R E S S   M E T A D A T A  *********/
@@ -116,16 +124,30 @@ control SwitchIngress(
         inout ingress_intrinsic_metadata_for_deparser_t ig_intr_dprsr_md,
         inout ingress_intrinsic_metadata_for_tm_t ig_intr_tm_md) {
 
-    // Random value used to calculate pkt loss 
+    // Random value used to calculate pkt loss jitter
     Random<bit<10>>() rnd;
+    Random<bit<7>>() percent;
+    Random<bit<1>>() signalSelector;
 
-    // Register to validate the latency value 
+    // Register to validate the latency value
     Register <bit<32>, _> (32w1)  tscal;
+    Register <bit<32>, _> (32w1)  ax;
 
     RegisterAction<bit<32>, bit<1>, bit<8>>(tscal) tscal_action = {
         void apply(inout bit<32> value, out bit<8> readvalue){
             value = 0;
             if (md.ts_diff > latency){ // @1-latency
+                readvalue = 1;
+            }else {
+                readvalue = 0;
+            }
+        }
+    };
+
+    RegisterAction<bit<32>, bit<1>, bit<8>>(ax) ax_action = {
+        void apply(inout bit<32> value, out bit<8> readvalue){
+            value = 0;
+            if (md.ts_diff > constJitter){ // @jitter
                 readvalue = 1;
             }else {
                 readvalue = 0;
@@ -151,11 +173,12 @@ control SwitchIngress(
     // Send packet to the next internal switch 
     // Reset the initial timestamp
     // Increase the ID of the switch
-    action send_next(bit<16> sw_id) {
+    action send_next(bit<16> link_id, bit<16> sw_id) {
         hdr.rec.ts = ig_intr_md.ingress_mac_tstamp[31:0];
         hdr.rec.num = 1;
-        hdr.rec.sw = sw_id;
-        ig_intr_tm_md.ucast_egress_port = rec_port;
+        hdr.rec.sw = link_id;
+        hdr.rec.sw_id = sw_id;
+        ig_intr_tm_md.ucast_egress_port = port_user;
     }
 
     // Forward a packet directly without any P7 processing
@@ -175,6 +198,16 @@ control SwitchIngress(
          md.ts_diff = ig_intr_md.ingress_mac_tstamp[31:0] - hdr.rec.ts;
     }
 
+    // increases jitter in the timestamp difference
+    action apply_more_jitter(){
+	  md.ts_diff = md.ts_diff + hdr.rec.jitter;
+    }
+
+    // decreases jitter in the timestamp difference
+    action apply_less_jitter(){
+    	  md.ts_diff = md.ts_diff - hdr.rec.jitter;
+    }
+
     // Match incoming packet
     // Add recirculation header
     // Save the ethertype of the original packet in the recirculation header - ether_type
@@ -189,6 +222,9 @@ control SwitchIngress(
         hdr.rec.dest_ip = hdr.ipv4.dst_addr;
         hdr.rec.ether_type = hdr.ethernet.ether_type;
         hdr.vlan_tag.vid = p7_vlan;
+
+        hdr.rec.jitter = md.jitter_metadata;
+        hdr.rec.signal = md.signal_metadata;
 
         hdr.ethernet.ether_type = 0x9966;
         //hdr.ethernet.src_addr = 0x000000000000;
@@ -205,6 +241,9 @@ control SwitchIngress(
         hdr.rec.dest_ip = hdr.arp.dest_ip;
         hdr.rec.ether_type = hdr.ethernet.ether_type;
         hdr.vlan_tag.vid = p7_vlan;
+
+        hdr.rec.jitter = md.jitter_metadata;
+        hdr.rec.signal = md.signal_metadata;
 
         hdr.ethernet.ether_type = 0x9966;
 
@@ -261,7 +300,18 @@ control SwitchIngress(
     apply {
         // Can be remove, just for internal use
         // if (ig_intr_md.ingress_port == 136 || ig_intr_md.ingress_port == 137){drop();}
-
+        //sets the jitter to be applied
+	 if(!hdr.rec.isValid()){
+	     bit<7> P = percent.get();
+	     if(P <= percentTax){
+	         md.jitter_metadata = constJitter;
+		 md.signal_metadata = signalSelector.get();
+	     }
+	     else{
+		 md.jitter_metadata = 0;
+		 md.signal_metadata = 0;
+	     }
+	  }
         // Validate if the incoming packet has VLAN header
         // Match the VLAN_ID with P7
         if (hdr.vlan_tag.isValid() && !hdr.rec.isValid() && !hdr.arp.isValid()) {
@@ -280,6 +330,13 @@ control SwitchIngress(
                     bit<8> value_tscal;
                     md.ts_diff = 0;
                     comp_diff();
+    		     //apply the jitter
+		     if(hdr.rec.signal==0){
+		         apply_more_jitter();
+      		     }else{
+   		         if(ax_action.execute(1)==1)
+		     	     apply_less_jitter();
+		     }
                     value_tscal = tscal_action.execute(1);
                     if (value_tscal == 1){
                         bit<10> R = rnd.get();
@@ -296,6 +353,13 @@ control SwitchIngress(
                     bit<8> value_tscal;
                     md.ts_diff = 0;
                     comp_diff();
+    		     //apply the jitter
+		     if(hdr.rec.signal==0){
+		         apply_more_jitter();
+      		     }else{
+   		         if(ax_action.execute(1)==1)
+		     	     apply_less_jitter();
+		     }
                     value_tscal = tscal_action.execute(1);
                     if (value_tscal == 1){
                         bit<10> R = rnd.get();
@@ -312,6 +376,13 @@ control SwitchIngress(
                     bit<8> value_tscal;
                     md.ts_diff = 0;
                     comp_diff();
+    		     //apply the jitter
+		     if(hdr.rec.signal==0){
+		         apply_more_jitter();
+      		     }else{
+   		         if(ax_action.execute(1)==1)
+		     	     apply_less_jitter();
+		     }
                     value_tscal = tscal_action.execute(1);
                     if (value_tscal == 1){
                         bit<10> R = rnd.get();
@@ -328,6 +399,13 @@ control SwitchIngress(
                     bit<8> value_tscal;
                     md.ts_diff = 0;
                     comp_diff();
+    		     //apply the jitter
+		     if(hdr.rec.signal==0){
+		         apply_more_jitter();
+      		     }else{
+   		         if(ax_action.execute(1)==1)
+		     	     apply_less_jitter();
+		     }
                     value_tscal = tscal_action.execute(1);
                     if (value_tscal == 1){
                         bit<10> R = rnd.get();
@@ -344,6 +422,13 @@ control SwitchIngress(
                     bit<8> value_tscal;
                     md.ts_diff = 0;
                     comp_diff();
+    		     //apply the jitter
+		     if(hdr.rec.signal==0){
+		         apply_more_jitter();
+      		     }else{
+   		         if(ax_action.execute(1)==1)
+		     	     apply_less_jitter();
+		     }
                     value_tscal = tscal_action.execute(1);
                     if (value_tscal == 1){
                         bit<10> R = rnd.get();
@@ -360,6 +445,13 @@ control SwitchIngress(
                     bit<8> value_tscal;
                     md.ts_diff = 0;
                     comp_diff();
+    		     //apply the jitter
+		     if(hdr.rec.signal==0){
+		         apply_more_jitter();
+      		     }else{
+   		         if(ax_action.execute(1)==1)
+		     	     apply_less_jitter();
+		     }
                     value_tscal = tscal_action.execute(1);
                     if (value_tscal == 1){
                         bit<10> R = rnd.get();
@@ -376,22 +468,13 @@ control SwitchIngress(
                     bit<8> value_tscal;
                     md.ts_diff = 0;
                     comp_diff();
-                    value_tscal = tscal_action.execute(1);
-                    if (value_tscal == 1){
-                        bit<10> R = rnd.get();
-                        if (R >= pkt_loss) {            // @2-% of pkt loss 
-                            basic_fwd.apply();
-                        }else{
-                            drop();
-                        } 
-                    }else {
-                        recirculate(rec_port);          // Recirculation port (e.g., loopback interface)
-                    }   
-                }
-                else if (hdr.rec.sw == 7){                   // 0 - ID switch
-                    bit<8> value_tscal;
-                    md.ts_diff = 0;
-                    comp_diff();
+    		     //apply the jitter
+		     if(hdr.rec.signal==0){
+		         apply_more_jitter();
+      		     }else{
+   		         if(ax_action.execute(1)==1)
+		     	     apply_less_jitter();
+		     }
                     value_tscal = tscal_action.execute(1);
                     if (value_tscal == 1){
                         bit<10> R = rnd.get();
@@ -423,6 +506,6 @@ Pipeline(SwitchIngressParser(),
          SwitchIngressDeparser(),
          EmptyEgressParser(),
          EmptyEgress(),
-         EmptyEgressDeparser()) pipe;
+         EmptyEgressDeparser()) pipe_p7;
 
-Switch(pipe) main;
+Switch(pipe_p7) main;
