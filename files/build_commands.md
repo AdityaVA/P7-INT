@@ -1,0 +1,1 @@
+sudo -E ~/tools/p4_build.sh files/int_mod.p4 P4_VERSION=p4-16 \P4_ARCHITECTURE=tna \P4FLAGS="--verbose 2 --create-graphs -g -Xp4c="--disable-parse-depth-limit"" \P4PPFLAGS="-DTOFINO" \P4JOBS=4  \P4_NAME=int_mod \enable_thrift=yes
