@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 P7 (P4 Programmable Patch Panel): an instant 100G emulated network testbed in a pizza box
 ==
 
