@@ -130,12 +130,12 @@ topo.addparams('ucast_egress_port=132, sink_reporting_port=132')
 topo.insert()
 
 topo.addtable('sw4','Egress.Int_sink.Int_report.tb_int_reporting')
-topo.addaction('Int_sink.set_default_with_send_report')
+topo.addaction('Int_sink.add_with_send_report')
 topo.addparams('dp_mac=\'f6:61:c0:6a:00:00\', dp_ip=IPAddress(\'10.0.1.1\'), collector_mac=\'f6:61:c0:6a:14:21\', collector_ip=IPAddress(\'10.0.0.254\'), collector_port=6000')
 topo.insert()
 
 topo.addtable('sw4','Egress.Int_transit.tb_int_transit')
-topo.addaction('Int_transit.set_default_with_configure_transit')
+topo.addaction('Int_transit.add_with_configure_transit')
 topo.addparams('switch_id=4, l3_mtu=1500')
 topo.insert()
 # add table entry sw2
