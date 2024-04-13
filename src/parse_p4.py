@@ -76,7 +76,7 @@ def editP4(p4_code, u_port, tables_used, include_folder = "p4src/include/"): #pu
 					allContent = allContent[:ethFinal+a+1] + add + allContent[ethFinal+a:]
 
 					#new state to parser rec header
-					newState = "\n\tstate parse_rec { \n\t\tpacket.extract(hdr.rec);\n\t\ttransition select(hdr.rec.ether_type){\n"+ transitionContent   +"\n\t}\n"
+					newState = "\n\tstate parse_rec { \n\t\tpkt.extract(hdr.rec);\n\t\ttransition select(hdr.rec.ether_type){\n"+ transitionContent   +"\n\t}\n"
 					x = ethStart
 					aux = re.search(patternEthernetFull, allContent[x:])
 					allContent = allContent[:x+aux.end()+1] + newState +allContent[x+aux.end()+1:]
@@ -145,7 +145,7 @@ def editP4(p4_code, u_port, tables_used, include_folder = "p4src/include/"): #pu
 					st = matchi.start()
 					en = matchi.end()
 
-					allContent = allContent[:ig3.end()+en-1] + "\tig_intr_tm_md.ucast_egress_port = " + str(user_port) + ";\n\t" + allContent[ig3.end()+en-1:]
+					allContent = allContent[:ig3.end()+en-1] + "\tig_tm_md.ucast_egress_port = " + str(user_port) + ";\n\t" + allContent[ig3.end()+en-1:]
 			
 			
 			if file == p4_original:

@@ -45,13 +45,12 @@ control Int_transit(inout headers hdr, inout metadata meta, inout standard_metad
             actions = {
                 configure_transit;
             }
-            key = { hdr.rec.sw_id : exact; }
             #if TOFINO
             size = 512;
             #endif
         
-		
-        }
+		key = { hdr.rec.sw_id : exact; }
+}
 
         action int_set_header_0() {
             hdr.int_switch_id.setValid();

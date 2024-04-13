@@ -25,16 +25,16 @@ error
 }
 
 #ifdef BMV2
-parser ParserImpl(packet_in packet, out headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata) {
+parser ParserImpl(packet_in pkt, out headers hdr, inout metadata meta, inout standard_metadata_t standard_metadata) {
     state start {
        transition parse_ethernet;
     }
 #elif TOFINO
-parser IngressParser(packet_in packet, out headers hdr, out metadata meta, out ingress_intrinsic_metadata_t standard_metadata) {
+parser IngressParser(packet_in pkt, out headers hdr, out metadata meta, out ingress_intrinsic_metadata_t standard_metadata) {
     Checksum() ipv4_checksum;
     state start {
-        packet.extract(standard_metadata);
-        packet.advance(PORT_METADATA_SIZE);
+        pkt.extract(standard_metadata);
+        pkt.advance(PORT_METADATA_SIZE);
         meta.int_metadata.mirror_type = 0;
         meta.int_metadata.session_ID = 1;
         meta.int_metadata.source = 0;
@@ -61,7 +61,7 @@ parser IngressParser(packet_in packet, out headers hdr, out metadata meta, out i
 #endif
 
     state parse_ethernet {
-        packet.extract(hdr.ethernet);
+        pkt.extract(hdr.ethernet);
         transition select(hdr.ethernet.etherType) {
 
 			16w0x9966:   parse_rec;
@@ -72,14 +72,14 @@ parser IngressParser(packet_in packet, out headers hdr, out metadata meta, out i
     }
 
 	state parse_rec { 
-		packet.extract(hdr.rec);
+		pkt.extract(hdr.rec);
 		transition select(hdr.rec.ether_type){
             16w0x800: parse_ipv4;
             default: accept;
         }
 	}
     state parse_ipv4 {
-        packet.extract(hdr.ipv4);
+        pkt.extract(hdr.ipv4);
         meta.layer34_metadata.ip_src = hdr.ipv4.srcAddr;
         meta.layer34_metadata.ip_dst = hdr.ipv4.dstAddr;
         meta.layer34_metadata.ip_ver = 8w4;
@@ -98,7 +98,7 @@ parser IngressParser(packet_in packet, out headers hdr, out metadata meta, out i
         }
     }
     state parse_tcp {
-        packet.extract(hdr.tcp);
+        pkt.extract(hdr.tcp);
         meta.layer34_metadata.l4_src = hdr.tcp.srcPort;
         meta.layer34_metadata.l4_dst = hdr.tcp.dstPort;
         meta.layer34_metadata.l4_proto = 8w0x6;
@@ -108,7 +108,7 @@ parser IngressParser(packet_in packet, out headers hdr, out metadata meta, out i
         }
     }
     state parse_udp {
-        packet.extract(hdr.udp);
+        pkt.extract(hdr.udp);
         meta.layer34_metadata.l4_src = hdr.udp.srcPort;
         meta.layer34_metadata.l4_dst = hdr.udp.dstPort;
         meta.layer34_metadata.l4_proto = 8w0x11;
@@ -118,9 +118,9 @@ parser IngressParser(packet_in packet, out headers hdr, out metadata meta, out i
         }
     }
     state parse_int {
-        packet.extract(hdr.int_shim);
+        pkt.extract(hdr.int_shim);
         /*verify(hdr.int_shim.len >= 3, error.INTShimLenTooShort);*/
-        packet.extract(hdr.int_header);
+        pkt.extract(hdr.int_header);
         // DAMU: warning (from TOFINO): Parser "verify" is currently unsupported
         /*verify(hdr.int_header.ver == INT_VERSION, error.INTVersionNotSupported);*/
         transition accept;
@@ -128,33 +128,33 @@ parser IngressParser(packet_in packet, out headers hdr, out metadata meta, out i
 }
 
 #ifdef BMV2
-control DeparserImpl(packet_out packet, in headers hdr) {
+control DeparserImpl(packet_out pkt, in headers hdr) {
     apply {
         // raport headers
-        packet.emit(hdr.report_ethernet);
-        packet.emit(hdr.report_ipv4);
-        packet.emit(hdr.report_udp);
-        packet.emit(hdr.report_fixed_header);
+        pkt.emit(hdr.report_ethernet);
+        pkt.emit(hdr.report_ipv4);
+        pkt.emit(hdr.report_udp);
+        pkt.emit(hdr.report_fixed_header);
         
         // original headers
-        packet.emit(hdr.ethernet);
-        packet.emit(hdr.ipv4);
-        packet.emit(hdr.udp);
-        packet.emit(hdr.tcp);
+        pkt.emit(hdr.ethernet);
+        pkt.emit(hdr.ipv4);
+        pkt.emit(hdr.udp);
+        pkt.emit(hdr.tcp);
         
         // INT headers
-        packet.emit(hdr.int_shim);
-        packet.emit(hdr.int_header);
+        pkt.emit(hdr.int_shim);
+        pkt.emit(hdr.int_header);
         
         // local INT node metadata
-        packet.emit(hdr.int_switch_id);     //bit 1
-        packet.emit(hdr.int_port_ids);       //bit 2
-        packet.emit(hdr.int_hop_latency);   //bit 3
-        packet.emit(hdr.int_q_occupancy);  // bit 4
-        packet.emit(hdr.int_ingress_tstamp);  // bit 5
-        packet.emit(hdr.int_egress_tstamp);   // bit 6
-        packet.emit(hdr.int_level2_port_ids);   // bit 7
-        packet.emit(hdr.int_egress_port_tx_util);  // bit 8
+        pkt.emit(hdr.int_switch_id);     //bit 1
+        pkt.emit(hdr.int_port_ids);       //bit 2
+        pkt.emit(hdr.int_hop_latency);   //bit 3
+        pkt.emit(hdr.int_q_occupancy);  // bit 4
+        pkt.emit(hdr.int_ingress_tstamp);  // bit 5
+        pkt.emit(hdr.int_egress_tstamp);   // bit 6
+        pkt.emit(hdr.int_level2_port_ids);   // bit 7
+        pkt.emit(hdr.int_egress_port_tx_util);  // bit 8
     }
 }
 
@@ -551,7 +551,7 @@ parser EgressParser(packet_in        pkt,
 }
 /*********************  I N G R E S S   D E P A R S E R  ************************/
 
-control IngressDeparser(packet_out packet,
+control IngressDeparser(packet_out pkt,
     inout headers hdr,
     in metadata meta,
     in ingress_intrinsic_metadata_for_deparser_t ig_dprsr_md) {
@@ -586,28 +586,28 @@ control IngressDeparser(packet_out packet,
             mirror.emit<mirror_h>(meta.int_metadata.session_ID, {meta.mirror_md.mirror_type, meta.int_metadata.ingress_tstamp, meta.int_metadata.ingress_port});
         }
         // bridge header
-        packet.emit(meta.int_metadata);
+        pkt.emit(meta.int_metadata);
         
         // original headers
-        packet.emit(hdr.ethernet);
-        packet.emit(hdr.ipv4);
-        packet.emit(hdr.udp);
-        packet.emit(hdr.tcp);
+        pkt.emit(hdr.ethernet);
+        pkt.emit(hdr.ipv4);
+        pkt.emit(hdr.udp);
+        pkt.emit(hdr.tcp);
         
         // INT headers
-        packet.emit(hdr.int_shim);
-       // packet.emit(hdr.int_header);
+        pkt.emit(hdr.int_shim);
+       // pkt.emit(hdr.int_header);
 
         /* Fede: these will never be valid in the Ingress pipeline
         // local INT node metadata
-        packet.emit(hdr.int_switch_id);
-        packet.emit(hdr.int_port_ids);
-        packet.emit(hdr.int_hop_latency);
-        packet.emit(hdr.int_q_occupancy);
-        packet.emit(hdr.int_ingress_tstamp);
-        packet.emit(hdr.int_egress_tstamp);
-        packet.emit(hdr.int_level2_port_ids);
-        packet.emit(hdr.int_egress_port_tx_util);
+        pkt.emit(hdr.int_switch_id);
+        pkt.emit(hdr.int_port_ids);
+        pkt.emit(hdr.int_hop_latency);
+        pkt.emit(hdr.int_q_occupancy);
+        pkt.emit(hdr.int_ingress_tstamp);
+        pkt.emit(hdr.int_egress_tstamp);
+        pkt.emit(hdr.int_level2_port_ids);
+        pkt.emit(hdr.int_egress_port_tx_util);
         */
 
     }
@@ -616,7 +616,7 @@ control IngressDeparser(packet_out packet,
 
 /*********************  E G R E S S    D E P A R S E R  ************************/
 
-control EgressDeparser(packet_out packet,
+control EgressDeparser(packet_out pkt,
                                     /* User */
                                     inout headers                       hdr,
                                     in    metadata                      meta,
@@ -667,33 +667,33 @@ control EgressDeparser(packet_out packet,
         }
         
         // report headers
-        packet.emit(hdr.report_ethernet);
-        packet.emit(hdr.report_ipv4);
-        packet.emit(hdr.report_udp);
-        packet.emit(hdr.report_fixed_header);
+        pkt.emit(hdr.report_ethernet);
+        pkt.emit(hdr.report_ipv4);
+        pkt.emit(hdr.report_udp);
+        pkt.emit(hdr.report_fixed_header);
 
         // original headers
-        packet.emit(hdr.ethernet);
-        packet.emit(hdr.ipv4);
-        packet.emit(hdr.udp);
-        packet.emit(hdr.tcp);
+        pkt.emit(hdr.ethernet);
+        pkt.emit(hdr.ipv4);
+        pkt.emit(hdr.udp);
+        pkt.emit(hdr.tcp);
         
         // INT headers
-        packet.emit(hdr.int_shim);
-        packet.emit(hdr.int_header);
+        pkt.emit(hdr.int_shim);
+        pkt.emit(hdr.int_header);
         
         // local INT node data
-        packet.emit(hdr.int_switch_id);
-        packet.emit(hdr.int_port_ids);
-        packet.emit(hdr.int_hop_latency);
-        packet.emit(hdr.int_q_occupancy);
-        packet.emit(hdr.int_ingress_tstamp);
-        packet.emit(hdr.int_egress_tstamp);
-        packet.emit(hdr.int_level2_port_ids);
-        packet.emit(hdr.int_egress_port_tx_util);
+        pkt.emit(hdr.int_switch_id);
+        pkt.emit(hdr.int_port_ids);
+        pkt.emit(hdr.int_hop_latency);
+        pkt.emit(hdr.int_q_occupancy);
+        pkt.emit(hdr.int_ingress_tstamp);
+        pkt.emit(hdr.int_egress_tstamp);
+        pkt.emit(hdr.int_level2_port_ids);
+        pkt.emit(hdr.int_egress_port_tx_util);
 
         // Previous nodes INT data
-        packet.emit(hdr.int_data);
+        pkt.emit(hdr.int_data);
 	}
     }
 #endif

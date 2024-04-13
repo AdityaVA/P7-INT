@@ -36,13 +36,11 @@ topo.addp4("p4src/int.p4")
 # include the link configuration
 topo.addhost("h1","2/0", 136, 10000000000, "False", "False", 1920, "10.0.1.1") 
 topo.addhost("h2","1/0", 128, 10000000000, "False", "False", 1920, "10.0.2.2") 
-topo.addhost("collector","2/1", 132, 10000000000, "False", "False", 1920, "10.0.0.254")
 
 # addlink(node1, node2, bw, pkt_loss, latency, jitter, percentage)
 # bw is considered just for the first defined link
 topo.addlink("h1","sw1", 10000000000, 0, 0, 0, 100)
 topo.addlink("h2","sw4", 10000000000, 0, 0, 0, 100)
-topo.addlink("collector","sw4", 10000000000, 0, 0, 0, 100)
 topo.addlink("sw1","sw2", 10000000000, 0, 0, 0, 100)
 topo.addlink("sw2","sw3", 10000000000, 0, 0, 0, 100)
 topo.addlink("sw3","sw4", 10000000000, 0, 0, 0, 100)

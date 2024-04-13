@@ -438,29 +438,6 @@ control SwitchIngress(
                     }else {
                         recirculate(rec_port);          // Recirculation port (e.g., loopback interface)
                     }   
-                }
-                else if (hdr.rec.sw == 5){                   // 0 - ID switch
-                    bit<8> value_tscal;
-                    md.ts_diff = 0;
-                    comp_diff();
-    		     //apply the jitter
-		     if(hdr.rec.signal==0){
-		         apply_more_jitter();
-      		     }else{
-   		         if(ax_action.execute(1)==1)
-		     	     apply_less_jitter();
-		     }
-                    value_tscal = tscal_action.execute(1);
-                    if (value_tscal == 1){
-                        bit<10> R = rnd.get();
-                        if (R >= pkt_loss) {            // @2-% of pkt loss 
-                            basic_fwd.apply();
-                        }else{
-                            drop();
-                        } 
-                    }else {
-                        recirculate(rec_port);          // Recirculation port (e.g., loopback interface)
-                    }   
                 }else{
                     drop();
                 } 
